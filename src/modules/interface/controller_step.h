@@ -21,29 +21,27 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * controller.h - Controller interface
+ * controller_indi.h - INDI Controller Interface
  */
-#ifndef __CONTROLLER_H__
-#define __CONTROLLER_H__
+#ifndef __CONTROLLER_STEP_H__
+#define __CONTROLLER_STEP_H__
 
 #include "stabilizer_types.h"
+#include "filter.h"
+#include "math3d.h"
+#include "log.h"
+#include "param.h"
+#include "position_controller.h"
+#include "attitude_controller.h"
+#include "controller_indi.h"
 
-typedef enum {
-  ControllerTypeAny,
-  ControllerTypePID,
-  ControllerTypeMellinger,
-  ControllerTypeINDI,
-  ControllerTypeSTEP,
-  ControllerType_COUNT,
-} ControllerType;
+#define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
 
-void controllerInit(ControllerType controller);
-bool controllerTest(void);
-void controller(control_t *control, setpoint_t *setpoint,
+void controllerSTEPInit(void);
+bool controllerSTEPTest(void);
+void controllerSTEP(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
                                          const uint32_t tick);
-ControllerType getControllerType(void);
-const char* controllerGetName();
 
-#endif //__CONTROLLER_H__
+#endif //__CONTROLLER_STEP_H__
