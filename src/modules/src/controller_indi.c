@@ -274,8 +274,6 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.attitude_c.x = indi.attitude_f.x + phi_tilde;
 		indi.attitude_c.y = indi.attitude_f.y + theta_tilde;		
 
-		// compute commanded thrust with actuator dynamics, thrust threshold
-
 
 	}
 
@@ -297,8 +295,8 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 //	                                attitudeDesired.roll, attitudeDesired.pitch, attitudeDesired.yaw,
 //	                                &rateDesired.roll, &rateDesired.pitch, &rateDesired.yaw);
 
-		rateDesired.roll = roll_kp*(attitudeDesired.roll - indi.attitude_c.x);			// ev_tag: changed from state->attitude.roll
-		rateDesired.pitch = pitch_kp*(attitudeDesired.pitch - indi.attitude_c.y);		// ev_tag: changed from state->attitude.pitch
+		rateDesired.roll = roll_kp*(indi.attitude_c.x - state->attitude.roll);			// ev_tag: changed from attitudeDesired.roll
+		rateDesired.pitch = pitch_kp*(indi.attitude_c.y - state->attitude.pitch);		// ev_tag: changed from attitudeDesired.pitch
 		rateDesired.yaw = yaw_kp*(attitudeDesired.yaw - state->attitude.yaw);
 
 		// For roll and pitch, if velocity mode, overwrite rateDesired with the setpoint
