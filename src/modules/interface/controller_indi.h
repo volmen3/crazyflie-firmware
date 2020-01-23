@@ -119,6 +119,8 @@ struct IndiVariables {
   struct Vectr attitude_f;        // attitude filtered
   struct Vectr attitude_c;        // attitude commanded to the inner loop
   float T_tilde;                  // thrust increment
+  float T_inner;                  // thrust to inner INDI
+  float T_inner_f;
 };
 
 void controllerINDIInit(void);

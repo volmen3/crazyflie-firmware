@@ -107,6 +107,11 @@ static inline void filter_ddxi(Butterworth2LowPass *filter, struct Vectr *old_va
 	new_values->z = update_butterworth_2_low_pass(&filter[2], old_values->z);
 }
 
+static inline void filter_thrust(Butterworth2LowPass *filter, float *old_thrust, float *new_thrust) 
+{
+	*new_thrust = update_butterworth_2_low_pass(&filter[0], *old_thrust);
+}
+
 /**
  * @brief Caclulate finite difference form a filter array
  * The filter already contains the previous values
@@ -180,7 +185,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		// INDI lin. accel. controller (outer loop) ev_tag
 		
 		// TODO
-		float T = 0;
+		// - change G1, G2, PD-gains to new values
 
 		// Get reference position
 		positionDesired.x = setpoint->position.x;
@@ -235,20 +240,33 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.linear_accel_err.z = indi.linear_accel_ref.z - indi.linear_accel_f.x;
 
 		// Elements of G 
-		float a11 = (cosf(att.phi)*sinf(att.psi) - sinf(att.phi)*sinf(att.theta)*cosf(att.psi)) * T;
-		float a12 = (cosf(att.phi)*cosf(att.theta)*cosf(att.psi)) * T;
-		float a13 = (sinf(att.phi)*sinf(att.psi) + cosf(att.phi)*sinf(att.theta)*cosf(att.psi));
-		float a21 = (-cosf(att.phi)*cosf(att.psi) - sinf(att.phi)*sinf(att.theta)*sinf(att.psi)) * T;
-		float a22 = (cosf(att.phi)*cosf(att.theta)*sinf(att.psi)) * T;
-		float a23 = (-sinf(att.phi)*cosf(att.psi) + cosf(att.phi)*sinf(att.theta)*sinf(att.psi));
-		float a31 = (-sinf(att.phi)*cosf(att.theta)) * T;
-		float a32 = (-cosf(att.phi)*sinf(att.theta)) * T;
-		float a33 = (cosf(att.phi)*cosf(att.theta));
+		float g11 = (cosf(att.phi)*sinf(att.psi) - sinf(att.phi)*sinf(att.theta)*cosf(att.psi));
+		float g12 = (cosf(att.phi)*cosf(att.theta)*cosf(att.psi));
+		float g13 = (sinf(att.phi)*sinf(att.psi) + cosf(att.phi)*sinf(att.theta)*cosf(att.psi));
+		float g21 = (-cosf(att.phi)*cosf(att.psi) - sinf(att.phi)*sinf(att.theta)*sinf(att.psi));
+		float g22 = (cosf(att.phi)*cosf(att.theta)*sinf(att.psi));
+		float g23 = (-sinf(att.phi)*cosf(att.psi) + cosf(att.phi)*sinf(att.theta)*sinf(att.psi));
+		float g31 = (-sinf(att.phi)*cosf(att.theta));
+		float g32 = (-cosf(att.phi)*sinf(att.theta));
+		float g33 = (cosf(att.phi)*cosf(att.theta));
 		
-		// Determinant of G
+
+		// (G'*G)
+		float a11 = g11*g11 + g21*g21 + g31*g31;
+		float a12 = g11*g12 + g21*g22 + g31*g32;
+		float a13 = g11*g13 + g21*g23 + g31*g33;
+		float a21 = g12*g11 + g22*g21 + g32*g31;
+		float a22 = g12*g12 + g22*g22 + g32*g32;
+		float a23 = g12*g13 + g22*g23 + g32*g33;
+		float a31 = g13*g11 + g23*g21 + g33*g31;
+		float a32 = g13*g12 + g23*g22 + g33*g32;
+		float a33 = g13*g13 + g23*g23 + g33*g33;
+
+
+		// Determinant of (G'*G)
 		float detG = (a11*a22*a33 + a12*a23*a31 + a21*a32*a13) - (a13*a22*a31 + a11*a32*a23 + a12*a21*a33); 
 		
-		// Inverse of G 
+		// Inverse of (G'*G)
 		float a11_inv = (a22*a33 - a23*a32)/detG;
 		float a12_inv = (a13*a32 - a12*a33)/detG;
 		float a13_inv = (a12*a23 - a13*a22)/detG;
@@ -258,11 +276,34 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		float a31_inv = (a21*a32 - a22*a31)/detG;
 		float a32_inv = (a12*a31 - a11*a32)/detG;
 		float a33_inv = (a11*a22 - a12*a21)/detG; 
-		
+
+
+		// G_inv = (G'*G)_inv*G'
+		float g11_inv = a11_inv*g11 + a12_inv*g12 + a13_inv*g13;
+		float g12_inv = a11_inv*g21 + a12_inv*g22 + a13_inv*g23;
+		float g13_inv = a11_inv*g31 + a12_inv*g32 + a13_inv*g33;
+		float g21_inv = a21_inv*g11 + a22_inv*g12 + a23_inv*g13;
+		float g22_inv = a21_inv*g21 + a22_inv*g22 + a23_inv*g23;
+		float g23_inv = a21_inv*g31 + a22_inv*g32 + a23_inv*g33;
+		float g31_inv = a31_inv*g11 + a32_inv*g12 + a33_inv*g13;
+		float g32_inv = a31_inv*g21 + a32_inv*g22 + a33_inv*g23;
+		float g33_inv = a31_inv*g31 + a32_inv*g32 + a33_inv*g33;
+
+
 		// Lin. accel. error multiplied CF mass and G^(-1) matrix
-		float phi_tilde   = (a11_inv*indi.linear_accel_err.x + a12_inv*indi.linear_accel_err.y + a13_inv*indi.linear_accel_err.z)*CF_MASS;
-		float theta_tilde = (a21_inv*indi.linear_accel_err.x + a22_inv*indi.linear_accel_err.y + a23_inv*indi.linear_accel_err.z)*CF_MASS;
-		indi.T_tilde      = (a31_inv*indi.linear_accel_err.x + a32_inv*indi.linear_accel_err.y + a33_inv*indi.linear_accel_err.z)*CF_MASS; 	
+		float phi_tilde   = (g11_inv*indi.linear_accel_err.x + g12_inv*indi.linear_accel_err.y + g13_inv*indi.linear_accel_err.z)*CF_MASS;
+		float theta_tilde = (g21_inv*indi.linear_accel_err.x + g22_inv*indi.linear_accel_err.y + g23_inv*indi.linear_accel_err.z)*CF_MASS;
+		indi.T_tilde      = (g31_inv*indi.linear_accel_err.x + g32_inv*indi.linear_accel_err.y + g33_inv*indi.linear_accel_err.z)*CF_MASS; 	
+
+
+		// Filter thrust
+		filter_thrust(indi.rate, &indi.T_inner, &indi.T_inner_f);
+		
+		// Pass thrust through actuator dynamics
+		indi.T_inner = indi.T_inner + indi.act_dyn.p*(indi.T_inner_f - indi.T_inner); 
+
+		// Compute trust that goes into the inner loop
+		indi.T_inner = indi.T_tilde + indi.T_inner_f;
 
 		// Filter attitude obtained from state estimator (Filter parameters?)
 		indi.attitude_s.x = state->attitude.roll; 
@@ -270,10 +311,10 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.attitude_s.z = state->attitude.yaw;
 		filter_ddxi(indi.rate, &indi.attitude_s, &indi.attitude_f);
 
+
 		// Compute commanded attitude to the inner INDI
 		indi.attitude_c.x = indi.attitude_f.x + phi_tilde;
 		indi.attitude_c.y = indi.attitude_f.y + theta_tilde;		
-
 
 	}
 
@@ -284,7 +325,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 
 		// Switch between manual and automatic position control
 		if (setpoint->mode.z == modeDisable) {
-			actuatorThrust = setpoint->thrust;
+			actuatorThrust = indi.T_inner;					// changed from setpoint->thrust to indi.T_inner
 		}
 		if (setpoint->mode.x == modeDisable || setpoint->mode.y == modeDisable) {
 			attitudeDesired.roll = setpoint->attitude.roll;	
