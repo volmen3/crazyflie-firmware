@@ -31,19 +31,21 @@ static float bound_control_input = 32000.0f;
 static attitude_t attitudeDesired;
 static attitude_t rateDesired;
 // ev_tag
-static vector_t positionDesired; 
-static vector_t velocityDesired;
+static struct Vectr positionDesired; 
+static struct Vectr velocityDesired;
 float K_xi_x = 0.7;
 float K_xi_y = 0.7;
 float K_xi_z = 0.7;
 float K_dxi_x = 0.8;
 float K_dxi_y = 0.8;
-float K_dxi_z = 0.8; 
+float K_dxi_z = 0.8;
+static float pos_des_x, pos_des_y, pos_des_z; 
+static float pos_state_x, pos_state_y, pos_state_z;
 // ev_tag
 static float actuatorThrust;
-static float roll_kp = 6.0f;
-static float pitch_kp = 6.0f;
-static float yaw_kp = 6.0f;
+static float roll_kp = 3.0f;
+static float pitch_kp = 3.0f;
+static float yaw_kp = 3.0f;
 
 static float r_roll;
 static float r_pitch;
@@ -180,26 +182,27 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 
 	if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
 		//positionController(&actuatorThrust, &attitudeDesired, setpoint, state);
-
-
-		// INDI lin. accel. controller (outer loop) ev_tag
+		// INDI lin. accel. controller (outer loop) instead (ev_tag)
 		
-		// TODO
-		// - change G1, G2, PD-gains to new values
+
+		pos_state_x = state->position.x;
+		pos_state_y = -(state->position.y);
+		pos_state_z = state->position.z;
 
 		// Get reference position
-		positionDesired.x = setpoint->position.x;
-		positionDesired.y = setpoint->position.y;
-		positionDesired.z = setpoint->position.z;
+		positionDesired.x = pos_des_x;//setpoint->position.x;
+		positionDesired.y = pos_des_y;//setpoint->position.y;
+		positionDesired.z = pos_des_z;//setpoint->position.z;
+
 
 		// Position controller (K_xi?)
 		velocityDesired.x = K_xi_x*(positionDesired.x - state->position.x);
-		velocityDesired.y = K_xi_x*(positionDesired.y - state->position.y);
+		velocityDesired.y = K_xi_x*(positionDesired.y - (-state->position.y));
 		velocityDesired.z = K_xi_x*(positionDesired.z - state->position.z);
-
+		
 		// Velocity controller (K_dxi?)
 		indi.linear_accel_ref.x = K_dxi_x*(velocityDesired.x - state->velocity.x);
-		indi.linear_accel_ref.y = K_dxi_x*(velocityDesired.y - state->velocity.y);
+		indi.linear_accel_ref.y = K_dxi_x*(velocityDesired.y - (-state->velocity.y));
 		indi.linear_accel_ref.z = K_dxi_z*(velocityDesired.z - state->velocity.z);
 
 		
@@ -314,7 +317,8 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 
 		// Compute commanded attitude to the inner INDI
 		indi.attitude_c.x = indi.attitude_f.x + phi_tilde;
-		indi.attitude_c.y = indi.attitude_f.y + theta_tilde;		
+		indi.attitude_c.y = indi.attitude_f.y + theta_tilde;	
+
 
 	}
 
@@ -322,6 +326,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 	 * Skipping calls faster than ATTITUDE_RATE
 	 */
 	if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
+
 
 		// Switch between manual and automatic position control
 		if (setpoint->mode.z == modeDisable) {
@@ -412,7 +417,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		//(they have significant inertia, see the paper mentioned in the header for more explanation)
 		indi.du.p = 1.0f / indi.g1.p * (indi.angular_accel_ref.p - indi.rate_d[0]);
 		indi.du.q = 1.0f / indi.g1.q * (indi.angular_accel_ref.q - indi.rate_d[1]);
-		indi.du.r = 1.0f / (indi.g1.r + indi.g2) * (indi.angular_accel_ref.r - indi.rate_d[2] + indi.g2 * indi.du.r);
+		indi.du.r = 1.0f / (indi.g1.r - indi.g2) * (indi.angular_accel_ref.r - indi.rate_d[2] - indi.g2 * indi.du.r);
 
 
 		/*
@@ -511,3 +516,31 @@ LOG_ADD(LOG_FLOAT, rate_d[0], &indi.rate_d[0])
 LOG_ADD(LOG_FLOAT, rate_d[1], &indi.rate_d[1])
 LOG_ADD(LOG_FLOAT, rate_d[2], &indi.rate_d[2])
 LOG_GROUP_STOP(ctrlINDI)
+
+
+
+PARAM_GROUP_START(INDI_Outer)
+PARAM_ADD(PARAM_FLOAT, pos_des_x, &pos_des_x)
+PARAM_ADD(PARAM_FLOAT, pos_des_y, &pos_des_y)
+PARAM_ADD(PARAM_FLOAT, pos_des_z, &pos_des_z)
+PARAM_GROUP_STOP(INDI_Outer)
+
+
+
+
+
+
+
+LOG_GROUP_START(INDI_Outer)
+LOG_ADD(LOG_FLOAT, posState_x, &pos_state_x)
+LOG_ADD(LOG_FLOAT, posState_y, &pos_state_y)
+LOG_ADD(LOG_FLOAT, posState_z, &pos_state_z)
+
+LOG_ADD(LOG_FLOAT, posDes_x, &positionDesired.x)
+LOG_ADD(LOG_FLOAT, posDes_y, &positionDesired.y)
+LOG_ADD(LOG_FLOAT, posDes_z, &positionDesired.z)
+
+LOG_ADD(LOG_FLOAT, velDes_x, &velocityDesired.x)
+LOG_ADD(LOG_FLOAT, velDes_y, &velocityDesired.y)
+LOG_ADD(LOG_FLOAT, velDes_z, &velocityDesired.z)
+LOG_GROUP_STOP(INDI_Outer)
