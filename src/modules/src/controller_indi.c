@@ -219,9 +219,9 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.linear_accel_ref.z = K_dxi_z*(velocityRef.z + state->velocity.z);  //"+" because of coord. direction
 
 		// Read lin. acceleration (Body-fixed) obtained from sensors CHECKED
-		indi.linear_accel_s.x = sensors->acc.x;
-		indi.linear_accel_s.y = -sensors->acc.y;
-		indi.linear_accel_s.z = -sensors->acc.z;
+		indi.linear_accel_s.x = (sensors->acc.x)*9.81f;
+		indi.linear_accel_s.y = (-sensors->acc.y)*9.81f;
+		indi.linear_accel_s.z = (-sensors->acc.z)*9.81f;
 
 		// Filter lin. acceleration 
 		filter_ddxi(indi.ddxi, &indi.linear_accel_s, &indi.linear_accel_f);
@@ -252,22 +252,22 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		// Transform lin. acceleration in NED (add gravity to the z-component)
 		indi.linear_accel_ft.x = M_OB_11*indi.linear_accel_f.x + M_OB_12*indi.linear_accel_f.y + M_OB_13*indi.linear_accel_f.z;
 		indi.linear_accel_ft.y = M_OB_21*indi.linear_accel_f.x + M_OB_22*indi.linear_accel_f.y + M_OB_23*indi.linear_accel_f.z;
-		indi.linear_accel_ft.z = M_OB_31*indi.linear_accel_f.x + M_OB_32*indi.linear_accel_f.y + M_OB_33*indi.linear_accel_f.z + 1.0f;
+		indi.linear_accel_ft.z = M_OB_31*indi.linear_accel_f.x + M_OB_32*indi.linear_accel_f.y + M_OB_33*indi.linear_accel_f.z + 9.81f;
 
 		// Compute lin. acceleration error
 		indi.linear_accel_err.x = indi.linear_accel_ref.x - indi.linear_accel_ft.x;
-		indi.linear_accel_err.y = indi.linear_accel_ref.y - indi.linear_accel_ft.x;
-		indi.linear_accel_err.z = indi.linear_accel_ref.z - indi.linear_accel_ft.x;
+		indi.linear_accel_err.y = indi.linear_accel_ref.y - indi.linear_accel_ft.y;
+		indi.linear_accel_err.z = indi.linear_accel_ref.z - indi.linear_accel_ft.z;
 
 		// Elements of G 
-		float g11 = (cosf(att.phi)*sinf(att.psi) - sinf(att.phi)*sinf(att.theta)*cosf(att.psi));
-		float g12 = (cosf(att.phi)*cosf(att.theta)*cosf(att.psi));
+		float g11 = (cosf(att.phi)*sinf(att.psi) - sinf(att.phi)*sinf(att.theta)*cosf(att.psi))*(-9.81f);
+		float g12 = (cosf(att.phi)*cosf(att.theta)*cosf(att.psi))*(-9.81f);
 		float g13 = (sinf(att.phi)*sinf(att.psi) + cosf(att.phi)*sinf(att.theta)*cosf(att.psi));
-		float g21 = (-cosf(att.phi)*cosf(att.psi) - sinf(att.phi)*sinf(att.theta)*sinf(att.psi));
-		float g22 = (cosf(att.phi)*cosf(att.theta)*sinf(att.psi));
+		float g21 = (-cosf(att.phi)*cosf(att.psi) - sinf(att.phi)*sinf(att.theta)*sinf(att.psi))*(-9.81f);
+		float g22 = (cosf(att.phi)*cosf(att.theta)*sinf(att.psi))*(-9.81f);
 		float g23 = (-sinf(att.phi)*cosf(att.psi) + cosf(att.phi)*sinf(att.theta)*sinf(att.psi));
-		float g31 = (-sinf(att.phi)*cosf(att.theta));
-		float g32 = (-cosf(att.phi)*sinf(att.theta));
+		float g31 = (-sinf(att.phi)*cosf(att.theta))*(-9.81f);
+		float g32 = (-cosf(att.phi)*sinf(att.theta))*(-9.81f);
 		float g33 = (cosf(att.phi)*cosf(att.theta));
 
 		// (G'*G)
@@ -309,7 +309,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		// Lin. accel. error multiplied CF mass and G^(-1) matrix
 		indi.phi_tilde   = (g11_inv*indi.linear_accel_err.x + g12_inv*indi.linear_accel_err.y + g13_inv*indi.linear_accel_err.z);
 		indi.theta_tilde = (g21_inv*indi.linear_accel_err.x + g22_inv*indi.linear_accel_err.y + g23_inv*indi.linear_accel_err.z);
-		indi.T_tilde     = (g31_inv*indi.linear_accel_err.x + g32_inv*indi.linear_accel_err.y + g33_inv*indi.linear_accel_err.z); 	
+		indi.T_tilde     = -(g31_inv*indi.linear_accel_err.x + g32_inv*indi.linear_accel_err.y + g33_inv*indi.linear_accel_err.z); 	
 
 		// Filter thrust
 		filter_thrust(indi.thr, &indi.T_inner, &indi.T_inner_f);
