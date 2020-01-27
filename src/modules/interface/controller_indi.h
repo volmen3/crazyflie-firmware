@@ -102,6 +102,9 @@ struct IndiVariables {
 
   Butterworth2LowPass u[3];
   Butterworth2LowPass rate[3];
+  Butterworth2LowPass ddxi[3];
+  Butterworth2LowPass ang[3];
+  Butterworth2LowPass thr[3];
   struct FloatRates g1;
   float g2;
 
@@ -114,10 +117,13 @@ struct IndiVariables {
   struct Vectr linear_accel_ref;  
   struct Vectr linear_accel_err;
   struct Vectr linear_accel_s;    // acceleration sensed
-  struct Vectr linear_accel_f;    // acceleration filtered 
-  struct Vectr attitude_s;        // attitude senssed (here estimated)
-  struct Vectr attitude_f;        // attitude filtered
-  struct Vectr attitude_c;        // attitude commanded to the inner loop
+  struct Vectr linear_accel_f;    // acceleration filtered
+  struct Vectr linear_accel_ft;   // acceleration filtered transformed to NED 
+  struct Angles attitude_s;       // attitude senssed (here estimated)
+  struct Angles attitude_f;       // attitude filtered
+  struct Angles attitude_c;       // attitude commanded to the inner loop
+  float phi_tilde;                // roll angle increment
+  float theta_tilde;              // pitch angle increment
   float T_tilde;                  // thrust increment
   float T_inner;                  // thrust to inner INDI
   float T_inner_f;
