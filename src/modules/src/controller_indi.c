@@ -34,12 +34,13 @@ static attitude_t rateDesired;
 // ev_tag
 static struct Vectr positionRef; 
 static struct Vectr velocityRef;
-float K_xi_x = 0.7;
-float K_xi_y = 0.7;
-float K_xi_z = 0.7;
-float K_dxi_x = 0.8;
-float K_dxi_y = 0.8;
-float K_dxi_z = 0.8;
+float K_xi_x = 0.7f;
+float K_xi_y = 0.7f;
+float K_xi_z = 0.7f;
+float K_dxi_x = 0.8f;
+float K_dxi_y = 0.8f;
+float K_dxi_z = 0.8f;
+float K_thr = 0.00018071f;
 static float pos_set_x, pos_set_y, pos_set_z; 
 static float vel_set_x, vel_set_y, vel_set_z;
 static float posS_x, posS_y, posS_z;
@@ -194,10 +195,18 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		}
 	}
 
-	if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
+	//if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
 		//positionController(&actuatorThrust, &attitudeDesired, setpoint, state);
+	//}
 
-		// State posotion, velocity for logging
+	/*
+	 * Skipping calls faster than ATTITUDE_RATE
+	 */
+	if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
+
+		/********** INDI OUTER LOOP ****************/
+
+		// State position, velocity for logging
 		posS_x = state->position.x;
 		posS_y = -state->position.y;
 		posS_z = -state->position.z;
@@ -226,12 +235,13 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		// Filter lin. acceleration 
 		filter_ddxi(indi.ddxi, &indi.linear_accel_s, &indi.linear_accel_f);
 
-		// Obtain actual attitude values
+		// Obtain actual attitude values (in deg)
 		indi.attitude_s.phi = state->attitude.roll; 
 		indi.attitude_s.theta = state->attitude.pitch;
 		indi.attitude_s.psi = -state->attitude.yaw;
 		filter_ang(indi.ang, &indi.attitude_s, &indi.attitude_f);
 
+		// in (rad)
 		struct Angles att = {
 			.phi = indi.attitude_f.phi/180*PI,
 			.theta = indi.attitude_f.theta/180*PI,
@@ -259,7 +269,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.linear_accel_err.y = indi.linear_accel_ref.y - indi.linear_accel_ft.y;
 		indi.linear_accel_err.z = indi.linear_accel_ref.z - indi.linear_accel_ft.z;
 
-		// Elements of G 
+		// Elements of G ("-" because T points in neg. z-direction, "*9.81" because T/m=g)
 		float g11 = (cosf(att.phi)*sinf(att.psi) - sinf(att.phi)*sinf(att.theta)*cosf(att.psi))*(-9.81f);
 		float g12 = (cosf(att.phi)*cosf(att.theta)*cosf(att.psi))*(-9.81f);
 		float g13 = (sinf(att.phi)*sinf(att.psi) + cosf(att.phi)*sinf(att.theta)*cosf(att.psi));
@@ -306,10 +316,10 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		float g32_inv = a31_inv*g21 + a32_inv*g22 + a33_inv*g23;
 		float g33_inv = a31_inv*g31 + a32_inv*g32 + a33_inv*g33;
 
-		// Lin. accel. error multiplied CF mass and G^(-1) matrix
+		// Lin. accel. error multiplied CF mass and G^(-1) matrix (T_tilde negated because motor accepts only positiv commands, angles in rad)
 		indi.phi_tilde   = (g11_inv*indi.linear_accel_err.x + g12_inv*indi.linear_accel_err.y + g13_inv*indi.linear_accel_err.z);
 		indi.theta_tilde = (g21_inv*indi.linear_accel_err.x + g22_inv*indi.linear_accel_err.y + g23_inv*indi.linear_accel_err.z);
-		indi.T_tilde     = -(g31_inv*indi.linear_accel_err.x + g32_inv*indi.linear_accel_err.y + g33_inv*indi.linear_accel_err.z); 	
+		indi.T_tilde     = -(g31_inv*indi.linear_accel_err.x + g32_inv*indi.linear_accel_err.y + g33_inv*indi.linear_accel_err.z)/K_thr; 	
 
 		// Filter thrust
 		filter_thrust(indi.thr, &indi.T_inner, &indi.T_inner_f);
@@ -321,17 +331,16 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.T_inner = indi.T_tilde + indi.T_inner;
 
 		// Compute commanded attitude to the inner INDI
-		indi.attitude_c.phi = indi.attitude_f.phi + indi.phi_tilde;
-		indi.attitude_c.theta = indi.attitude_f.theta + indi.theta_tilde;	
+		indi.attitude_c.phi = indi.attitude_f.phi + indi.phi_tilde*180/PI;
+		indi.attitude_c.theta = indi.attitude_f.theta + indi.theta_tilde*180/PI;	
+
+		// Clamp commands
+		indi.T_inner = clamp(indi.T_inner, MIN_THRUST, MAX_THRUST);
+		indi.attitude_c.phi = clamp(indi.attitude_c.phi, -10.0f, 10.0f); 	
+		indi.attitude_c.theta = clamp(indi.attitude_c.theta, -10.0f, 10.0f);
 
 
-	}
-
-	/*
-	 * Skipping calls faster than ATTITUDE_RATE
-	 */
-	if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
-
+		/********** INDI INNER LOOP ****************/
 
 		// Switch between manual and automatic position control
 		if (setpoint->mode.z == modeDisable) {
