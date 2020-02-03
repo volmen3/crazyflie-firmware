@@ -214,6 +214,10 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		velS_y = -state->velocity.y;
 		velS_z = -state->velocity.z;
 
+		vel_set_x = setpoint->attitude.pitch;
+		vel_set_y = setpoint->attitude.roll;
+		vel_set_z = -setpoint->thrust/60000.0f;
+
 		// Position controller (K_xi?)
 		//velocityDesired.x = K_xi_x*(positionRef.x - state->position.x);
 		//velocityDesired.y = K_xi_x*(positionRef.y + state->position.y);
@@ -339,6 +343,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.attitude_c.phi = clamp(indi.attitude_c.phi, -10.0f, 10.0f); 	
 		indi.attitude_c.theta = clamp(indi.attitude_c.theta, -10.0f, 10.0f);
 
+		
 
 		/********** INDI INNER LOOP ****************/
 
@@ -599,27 +604,3 @@ LOG_ADD(LOG_FLOAT, cmd_phi, &indi.attitude_c.phi)
 LOG_ADD(LOG_FLOAT, cmd_theta, &indi.attitude_c.theta)
 
 LOG_GROUP_STOP(INDI_Outer)
-
-
-
-
-
-
-		// Some code for logging, testing--------------------------------------
-		/*
-		tDes = setpoint->thrust;
-		rDes = setpoint->attitude.roll;
-		pDes = setpoint->attitude.pitch;
-		yDes = setpoint->attitude.yaw;
-
-		// Get reference position
-		positionRef.x = pos_set_x;//setpoint->position.x;
-		positionRef.y = pos_set_y;//setpoint->position.y;
-		positionRef.z = pos_set_z;//setpoint->position.z;
-		static float tDes, rDes, pDes, yDes;
-		LOG_ADD(LOG_FLOAT, thrust, &tDes)
-		LOG_ADD(LOG_FLOAT, roll, &rDes)
-		LOG_ADD(LOG_FLOAT, pitch, &pDes)
-		LOG_ADD(LOG_FLOAT, yaw, &yDes)
-		*/
-		//---------------------------------------------------------------------
