@@ -30,6 +30,7 @@ static float bound_control_input = 32000.0f;
 
 static attitude_t attitudeDesired;
 static attitude_t rateDesired;
+static float attYawError; 
 
 // ev_tag
 static struct Vectr positionRef; 
@@ -129,6 +130,21 @@ static inline void filter_thrust(Butterworth2LowPass *filter, float *old_thrust,
 	*new_thrust = update_butterworth_2_low_pass(&filter[0], *old_thrust);
 }
 
+
+// Computes transformation matrix from body frame (index B) into NED frame (index O)
+void m_ob(struct Angles att, float matrix[3][3]) {
+
+	matrix[0][0] = cosf(att.theta)*cosf(att.psi);
+	matrix[0][1] = sinf(att.phi)*sinf(att.theta)*cosf(att.psi) - cosf(att.phi)*sinf(att.psi); 
+	matrix[0][2] = cosf(att.phi)*sinf(att.theta)*cosf(att.psi) + sinf(att.phi)*sinf(att.psi);
+	matrix[1][0] = cosf(att.theta)*sinf(att.psi);
+	matrix[1][1] = sinf(att.phi)*sinf(att.theta)*sinf(att.psi) + cosf(att.phi)*cosf(att.psi);
+	matrix[1][2] = cosf(att.phi)*sinf(att.theta)*sinf(att.psi) - sinf(att.phi)*cosf(att.psi);
+	matrix[2][0] = -sinf(att.theta);
+	matrix[2][1] = sinf(att.phi)*cosf(att.theta);
+	matrix[2][2] = cosf(att.phi)*cosf(att.theta);
+}
+
 /**
  * @brief Caclulate finite difference form a filter array
  * The filter already contains the previous values
@@ -213,8 +229,9 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		velS_x = state->velocity.x;
 		velS_y = -state->velocity.y;
 		velS_z = -state->velocity.z;
-
-		vel_set_x = setpoint->attitude.pitch;
+ 
+ 		// Mapping of roll, pitch, thrust commands to reference velocity commands 
+		vel_set_x = -setpoint->attitude.pitch;
 		vel_set_y = setpoint->attitude.roll;
 		vel_set_z = -setpoint->thrust/60000.0f;
 
@@ -227,9 +244,9 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		velocityRef.z = vel_set_z;
 
 		// Velocity controller (K_dxi?)
-		indi.linear_accel_ref.x = K_dxi_x*(velocityRef.x - state->velocity.x);
-		indi.linear_accel_ref.y = K_dxi_x*(velocityRef.y + state->velocity.y);	//"+" because of coord. direction
-		indi.linear_accel_ref.z = K_dxi_z*(velocityRef.z + state->velocity.z);  //"+" because of coord. direction
+		indi.linear_accel_ref.x = K_dxi_x*(velocityRef.x - velS_x);
+		indi.linear_accel_ref.y = K_dxi_x*(velocityRef.y - velS_y);
+		indi.linear_accel_ref.z = K_dxi_z*(velocityRef.z - velS_z); 
 
 		// Read lin. acceleration (Body-fixed) obtained from sensors CHECKED
 		indi.linear_accel_s.x = (sensors->acc.x)*9.81f;
@@ -245,28 +262,22 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.attitude_s.psi = -state->attitude.yaw;
 		filter_ang(indi.ang, &indi.attitude_s, &indi.attitude_f);
 
+    	
 		// in (rad)
 		struct Angles att = {
 			.phi = indi.attitude_f.phi/180*PI,
 			.theta = indi.attitude_f.theta/180*PI,
-			.psi = -indi.attitude_f.psi/180*PI,
+			.psi = indi.attitude_f.psi/180*PI,
 		};
 
 		// Compute transformation matrix from body frame (index B) into NED frame (index O)
-		float M_OB_11 = cosf(att.theta)*cosf(att.psi);
-		float M_OB_12 = sinf(att.phi)*sinf(att.theta)*cosf(att.psi) - cosf(att.phi)*sinf(att.psi); 
-		float M_OB_13 = cosf(att.phi)*sinf(att.theta)*cosf(att.psi) + sinf(att.phi)*sinf(att.psi);
-		float M_OB_21 = cosf(att.theta)*sinf(att.psi);
-		float M_OB_22 = sinf(att.phi)*sinf(att.theta)*sinf(att.psi) + cosf(att.phi)*cosf(att.psi);
-		float M_OB_23 = cosf(att.phi)*sinf(att.theta)*sinf(att.psi) - sinf(att.phi)*cosf(att.psi);
-		float M_OB_31 = -sinf(att.theta);
-		float M_OB_32 = sinf(att.phi)*cosf(att.theta);
-		float M_OB_33 = cosf(att.phi)*cosf(att.theta);
+		float M_OB[3][3] = {0};
+		m_ob(att, M_OB);
 
 		// Transform lin. acceleration in NED (add gravity to the z-component)
-		indi.linear_accel_ft.x = M_OB_11*indi.linear_accel_f.x + M_OB_12*indi.linear_accel_f.y + M_OB_13*indi.linear_accel_f.z;
-		indi.linear_accel_ft.y = M_OB_21*indi.linear_accel_f.x + M_OB_22*indi.linear_accel_f.y + M_OB_23*indi.linear_accel_f.z;
-		indi.linear_accel_ft.z = M_OB_31*indi.linear_accel_f.x + M_OB_32*indi.linear_accel_f.y + M_OB_33*indi.linear_accel_f.z + 9.81f;
+		indi.linear_accel_ft.x = M_OB[0][0]*indi.linear_accel_f.x + M_OB[0][1]*indi.linear_accel_f.y + M_OB[0][2]*indi.linear_accel_f.z;
+		indi.linear_accel_ft.y = M_OB[1][0]*indi.linear_accel_f.x + M_OB[1][1]*indi.linear_accel_f.y + M_OB[1][2]*indi.linear_accel_f.z;
+		indi.linear_accel_ft.z = M_OB[2][0]*indi.linear_accel_f.x + M_OB[2][1]*indi.linear_accel_f.y + M_OB[2][2]*indi.linear_accel_f.z + 9.81f;
 
 		// Compute lin. acceleration error
 		indi.linear_accel_err.x = indi.linear_accel_ref.x - indi.linear_accel_ft.x;
@@ -343,7 +354,6 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 		indi.attitude_c.phi = clamp(indi.attitude_c.phi, -10.0f, 10.0f); 	
 		indi.attitude_c.theta = clamp(indi.attitude_c.theta, -10.0f, 10.0f);
 
-		
 
 		/********** INDI INNER LOOP ****************/
 
@@ -362,7 +372,16 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 
 		rateDesired.roll = roll_kp*(indi.attitude_c.phi - state->attitude.roll);			// ev_tag: changed from attitudeDesired.roll
 		rateDesired.pitch = pitch_kp*(indi.attitude_c.theta - state->attitude.pitch);		// ev_tag: changed from attitudeDesired.pitch
-		rateDesired.yaw = yaw_kp*(attitudeDesired.yaw - state->attitude.yaw);
+		//rateDesired.yaw = yaw_kp*(attitudeDesired.yaw - state->attitude.yaw);
+		attYawError = attitudeDesired.yaw - state->attitude.yaw;		
+		if (attYawError > 180.0f) {
+			attYawError = attYawError - 360.0f;
+		}
+		else if (attYawError < -180.0f) {
+			attYawError = attYawError + 360.0f;
+		}
+		rateDesired.yaw = yaw_kp*attYawError;
+
 
 		// For roll and pitch, if velocity mode, overwrite rateDesired with the setpoint
 		// value. Also reset the PID to avoid error buildup, which can lead to unstable
