@@ -62,7 +62,7 @@
 #define CF_MASS 0.028f
 
 // Thrust command
-#define MIN_THRUST  1000
+#define MIN_THRUST  0
 #define MAX_THRUST  60000
 
 /**
@@ -131,6 +131,7 @@ struct IndiVariables {
   float T_tilde;                  // thrust increment
   float T_inner;                  // thrust to inner INDI
   float T_inner_f;
+  float T_incremented;
 };
 
 void controllerINDIInit(void);
