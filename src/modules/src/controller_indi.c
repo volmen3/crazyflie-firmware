@@ -49,6 +49,9 @@ static float vel_set_x, vel_set_y, vel_set_z;
 static float posS_x, posS_y, posS_z;
 static float velS_x, velS_y, velS_z;
 static float gyr_p, gyr_q, gyr_r;
+
+// TODO: DELETE
+static float arm = 0;
 // ev_tag
 
 static float actuatorThrust;
@@ -372,7 +375,7 @@ void controllerINDI(control_t *control, setpoint_t *setpoint,
 
 		// Switch between manual and automatic position control
 		if (setpoint->mode.z == modeDisable) {
-			actuatorThrust = indi.T_incremented;					// changed from setpoint->thrust to indi.T_incremented
+			actuatorThrust = indi.T_incremented*arm;					// changed from setpoint->thrust to indi.T_incremented
 		}
 		if (setpoint->mode.x == modeDisable || setpoint->mode.y == modeDisable) {
 			attitudeDesired.roll = setpoint->attitude.roll;	
@@ -577,6 +580,9 @@ PARAM_ADD(PARAM_FLOAT, pos_set_z, &pos_set_z)
 PARAM_ADD(PARAM_FLOAT, vel_set_x, &vel_set_x)
 PARAM_ADD(PARAM_FLOAT, vel_set_y, &vel_set_y)
 PARAM_ADD(PARAM_FLOAT, vel_set_z, &vel_set_z)
+
+PARAM_ADD(PARAM_FLOAT, arm, &arm)
+
 PARAM_GROUP_STOP(INDI_Outer)
 
 
