@@ -25,7 +25,7 @@
 
 #include "controller_step.h"
 
-static int16_t cmdThrust_ref = 0;
+static float cmdThrust_ref = 0;
 static int16_t actuatorThrust;
 static uint16_t count = 0;
 
@@ -51,23 +51,39 @@ void controllerSTEP(control_t *control, setpoint_t *setpoint,
 
 	if(count <= 2500) {
 		// wait 2500 counts 
-		cmdThrust_ref = 10000;
+		cmdThrust_ref = 36000;
 		control->thrust = cmdThrust_ref;
 		control->roll = 0;
 		control->pitch = 0;
 		control->yaw  = 0;
 	}
-	else if(count > 2500 && count <= 6500) {
+	else if(count > 2500 && count <= 4500) {
 		// wait another 4000 counts
-		cmdThrust_ref = 20000;
+		cmdThrust_ref = 42000;
 		control->thrust = cmdThrust_ref;
 		control->roll = 0;
 		control->pitch = 0;
 		control->yaw  = 0;
 	}
-	else if(count > 6500 && count <= 8000){
+	else if(count > 4500 && count <= 6500){
 		// wait another 1500 counts
-		cmdThrust_ref = 5000;
+		cmdThrust_ref = 30000;
+		control->thrust = cmdThrust_ref;
+		control->roll = 0;
+		control->pitch = 0;
+		control->yaw  = 0;
+	}
+	else if(count > 6500 && count <= 8500){
+		// wait another 1500 counts
+		cmdThrust_ref = 48000;
+		control->thrust = cmdThrust_ref;
+		control->roll = 0;
+		control->pitch = 0;
+		control->yaw  = 0;
+	}
+	else if(count > 8500 && count <= 10500){
+		// wait another 1500 counts
+		cmdThrust_ref = 25000;
 		control->thrust = cmdThrust_ref;
 		control->roll = 0;
 		control->pitch = 0;
